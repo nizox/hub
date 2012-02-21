@@ -2,6 +2,7 @@
 #define HUB_H
 
 #include <event2/event.h>
+#include "tun.h"
 
 struct peer {
   char const *name;
@@ -16,7 +17,7 @@ struct hub {
   size_t tx;
   size_t rx;
   short port;
-  char const *interface;
+  struct tnt_tun tun;
   struct event *ievent;
   struct event *levent;
   struct peer *peers;

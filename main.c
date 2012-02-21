@@ -2,16 +2,27 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>
+#include <signal.h>
 #include <event2/event.h>
 #include "hub.h"
 
-#define DEFAULT_INTERFACE "tap1"
 #define DEFAULT_PORT 8989
 
+static struct event_base *evbase;
 static struct hub hub = {
-  .interface = DEFAULT_INTERFACE,
   .port = DEFAULT_PORT,
+  .tun = {
+    .fd = -1,
+    .interface = NULL,
+    .type = TNT_TAP
+  }
 };
+
+static void
+handle_quit(int sig)
+{
+  event_base_loopexit(evbase, NULL);
+}
 
 static void
 usage(char const *progname)
@@ -25,14 +36,14 @@ int
 main(int argc, char * const argv[])
 {
   int opt;
-  struct event_base *evbase;
+  struct sigaction sa;
 
   while ((opt = getopt(argc, argv, "i:p:")) != -1)
   {
     switch (opt)
     {
       case 'i':
-        hub.interface = optarg;
+        hub.tun.interface = strdup(optarg);
         break;
       case 'p':
         hub.port = (short) evutil_strtoll(optarg, NULL, 10);
@@ -46,6 +57,12 @@ main(int argc, char * const argv[])
     hub_add_peer(&hub, argv[optind]);
   
   evbase = event_base_new();
+
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = handle_quit;
+  sigaction(SIGINT, &sa, NULL);
+  sigaction(SIGTERM, &sa, NULL);
+
   hub_init(&hub, evbase);
   hub_start(&hub);
   event_base_dispatch(evbase);

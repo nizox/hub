@@ -6,14 +6,9 @@
 #include <err.h>
 #include <event2/event.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
-#if defined(Linux)
-#include <sys/ioctl.h>
-#include <linux/if.h>
-#include <linux/if_tun.h>
-#endif
 
 #include "hub.h"
 
@@ -21,22 +16,27 @@
 #define MBUFSIZE 1500
 char mbuf[MBUFSIZE];
 
-
-#if !defined(Linux)
-static char *
-device_path_from_name(char const *name)
+static int
+exec(struct hub *hub, char const *scriptname)
 {
-#define INTERFACE_PATH "/dev/%s"
-  char *path;
-  size_t len;
+  int status;
+  char *args[3];
 
-  len = strlen(INTERFACE_PATH) + strlen(name);
-  path = malloc(len);
-  if (!path) return NULL;
-  snprintf(path, len, INTERFACE_PATH, name);
-  return path;
+  args[0] = (char *) scriptname;
+  args[1] = (char *) hub->tun.interface;
+  args[2] = NULL;
+
+  switch (fork()) {
+    case 0:
+        execv(scriptname, args);
+    case -1:
+      err(1, "cannot run %s", scriptname);
+    default:
+      if (wait(&status) == -1) err(1, NULL);
+  }
+
+  return (WIFEXITED(status) ? WEXITSTATUS(status) : -1);
 }
-#endif
 
 static void
 listen_callback(evutil_socket_t fd, short ev, void *arg)
@@ -111,31 +111,18 @@ interface_callback(evutil_socket_t fd, short ev, void *arg)
 void
 hub_init(struct hub *hub, struct event_base *evbase)
 {
-  int ifd, lfd;
+  int lfd;
   struct sockaddr_in addr;
 
-#if defined(Linux)
-  struct ifreq ifr;
+  if (tnt_tun_open(&hub->tun) == -1)
+    errx(1, NULL);
 
-  ifd = open("/dev/net/tun", O_RDWR);
-  if (ifd == -1) err(1, NULL);
+  if (evutil_make_socket_nonblocking(hub->tun.fd) == -1) err(1, NULL);
 
-  memset(&ifr, 0, sizeof(ifr));
-  ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-  strncpy(ifr.ifr_name, hub->interface, IFNAMSIZ);
-  if (ioctl(ifd, TUNSETIFF, &ifr) == -1) err(1, NULL);
-#else
-  char *device = device_path_from_name(hub->interface);
-
-  ifd = open(device, O_RDWR);
-  free(device);
-  if (ifd == -1) err(1, NULL);
-#endif
-
-  if (evutil_make_socket_nonblocking(ifd) == -1) err(1, NULL);
-
-  hub->ievent = event_new(evbase, ifd, EV_READ | EV_PERSIST,
+  hub->ievent = event_new(evbase, hub->tun.fd, EV_READ | EV_PERSIST,
       interface_callback, hub);
+
+  exec(hub, "up.sh");
 
   lfd = socket(PF_INET, SOCK_DGRAM, 0);
   if (lfd == -1) err(1, NULL);
@@ -157,6 +144,13 @@ hub_uninit(struct hub *hub)
 {
   struct peer *ptr = hub->peers;
 
+  exec(hub, "down.sh");
+
+  tnt_tun_close(&hub->tun);
+  if (hub->tun.interface) {
+    free(hub->tun.interface);
+  }
+
   evutil_closesocket(event_get_fd(hub->levent));
   evutil_closesocket(event_get_fd(hub->ievent));
   event_free(hub->levent);
@@ -164,7 +158,7 @@ hub_uninit(struct hub *hub)
 
   while (ptr)
   {
-    struct peer *tmp = ptr;
+    struct peer *tmp = ptr->next;
 
     free(ptr->addr);
     free(ptr);
@@ -229,4 +223,3 @@ hub_add_peer(struct hub *hub, char const *address)
 
   evutil_freeaddrinfo(answer);
 }
-
