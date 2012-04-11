@@ -15,7 +15,8 @@ find_package(Tapcfg REQUIRED)
 set(SOURCES_LIST hub.c tun.c
 	main.c)
 
-include_directories(${TAPCFG_INCLUDE_DIR})
+include_directories(${TAPCFG_INCLUDE_DIR}
+	${EVENT_INCLUDE_DIR})
 
 add_definitions(-D${CMAKE_SYSTEM_NAME})
 
