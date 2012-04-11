@@ -17,6 +17,7 @@ struct hub {
   size_t tx;
   size_t rx;
   short port;
+  char *ipaddr;
   struct tnt_tun tun;
   struct event *ievent;
   struct event *levent;

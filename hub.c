@@ -16,28 +16,6 @@
 #define MBUFSIZE 1500
 char mbuf[MBUFSIZE];
 
-static int
-exec(struct hub *hub, char const *scriptname)
-{
-  int status;
-  char *args[3];
-
-  args[0] = (char *) scriptname;
-  args[1] = (char *) hub->tun.interface;
-  args[2] = NULL;
-
-  switch (fork()) {
-    case 0:
-        execv(scriptname, args);
-    case -1:
-      err(1, "cannot run %s", scriptname);
-    default:
-      if (wait(&status) == -1) err(1, NULL);
-  }
-
-  return (WIFEXITED(status) ? WEXITSTATUS(status) : -1);
-}
-
 static void
 listen_callback(evutil_socket_t fd, short ev, void *arg)
 {
@@ -122,7 +100,11 @@ hub_init(struct hub *hub, struct event_base *evbase)
   hub->ievent = event_new(evbase, hub->tun.fd, EV_READ | EV_PERSIST,
       interface_callback, hub);
 
-  exec(hub, "up.sh");
+  if (hub->ipaddr == NULL
+      || tnt_tun_iface_set_ipv4(&hub->tun, hub->ipaddr) == -1)
+    errx(1, "missing or wrong IP address");
+
+  tnt_tun_iface_set_status(&hub->tun, TNT_STATUS_ALL_UP);
 
   lfd = socket(PF_INET, SOCK_DGRAM, 0);
   if (lfd == -1) err(1, NULL);
@@ -144,8 +126,7 @@ hub_uninit(struct hub *hub)
 {
   struct peer *ptr = hub->peers;
 
-  exec(hub, "down.sh");
-
+  tnt_tun_iface_set_status(&hub->tun, TNT_STATUS_ALL_DOWN);
   tnt_tun_close(&hub->tun);
   if (hub->tun.interface) {
     free(hub->tun.interface);

@@ -11,6 +11,7 @@
 static struct event_base *evbase;
 static struct hub hub = {
   .port = DEFAULT_PORT,
+  .ipaddr = NULL,
   .tun = {
     .fd = -1,
     .interface = NULL,
@@ -27,7 +28,7 @@ handle_quit(int sig)
 static void
 usage(char const *progname)
 {
-  fprintf(stderr, "Usage: %s [-i interface] [-p port] peer0 peer1 peerN\n",
+  fprintf(stderr, "Usage: %s [-a addr/mask] [-i interface] [-p port] peer0 peer1 peerN\n",
       progname);
   exit(EXIT_FAILURE);
 }
@@ -38,10 +39,13 @@ main(int argc, char * const argv[])
   int opt;
   struct sigaction sa;
 
-  while ((opt = getopt(argc, argv, "i:p:")) != -1)
+  while ((opt = getopt(argc, argv, "a:i:p:")) != -1)
   {
     switch (opt)
     {
+      case 'a':
+        hub.ipaddr = strdup(optarg);
+        break;
       case 'i':
         hub.tun.interface = strdup(optarg);
         break;
