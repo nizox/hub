@@ -15,6 +15,9 @@ find_package(Tapcfg REQUIRED)
 set(SOURCES_LIST hub.c tun.c
 	main.c)
 
+if (UNIX)
+    include_directories(/usr/include/ /usr/local/include)
+endif (UNIX)
 include_directories(${TAPCFG_INCLUDE_DIR}
 	${EVENT_INCLUDE_DIR})
 
