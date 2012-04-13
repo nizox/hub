@@ -43,7 +43,7 @@ listen_callback(evutil_socket_t fd, short ev, void *arg)
         }
         ptr = ptr->next;
       }
-      n = write(event_get_fd(hub->ievent), mbuf, n);
+      n = tnt_tun_write(&hub->tun, mbuf, n);
       if (n > 0)
         hub->rx += n;
     }
@@ -77,7 +77,7 @@ interface_callback(evutil_socket_t fd, short ev, void *arg)
 
   if (ev & EV_READ)
   {
-    if ((n = read(fd, mbuf, sizeof(mbuf))) > 0)
+    if ((n = tnt_tun_read(&hub->tun, mbuf, sizeof(mbuf))) > 0)
     {
       hub->tx += n;
       printf("broadcasting %hi bytes (total %hi bytes)\n", n, hub->tx);

@@ -54,3 +54,14 @@ int
 tnt_tun_iface_set_status(struct tnt_tun *tun, int flags) {
   return tapcfg_iface_set_status(tun->handle, flags);
 }
+
+int
+tnt_tun_write(struct tnt_tun *tun, char const *buf, int n) {
+  return tapcfg_write(tun->handle, (void *) buf, n);
+}
+
+int
+tnt_tun_read(struct tnt_tun *tun, char *buf, int n) {
+  tapcfg_wait_readable(tun->handle, 0); // windows reads while waiting
+  return tapcfg_read(tun->handle, (void *) buf, n);
+}
